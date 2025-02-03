@@ -37,6 +37,10 @@
     transition: width 0.7s ease-out;
 }
 
+.ql-editor{
+    height: auto !important;
+}
+
 .hover-line:hover .line {
     width: 100%;
 }

@@ -1,5 +1,4 @@
-import React from "react";
-import AboutCLient from "@/app/about/aboutCLient";
+import AboutClient from "@/app/about/aboutCLient";
 
 export const metadata = {
   title: "“Nordic” Ilmiy-amaliy Elektron Jurnali - Tahririyat Hayati",
@@ -12,7 +11,7 @@ export const metadata = {
     description:
       "Nordic xalqaro universiteti tomonidan nashr etiladigan ilmiy-amaliy elektron jurnal haqida ma'lumot oling. Bu yerda tahririyat hayati, maqolalar va nashr etilish sanalari haqida batafsil ma'lumot mavjud.",
     type: "website",
-    url: `${process.env["NEXT_PUBLIC_SITE_URL"]}/about`,
+    url: `${process.env.NEXT_PUBLIC_SITE_URL}/about`,
     images: [
       {
         url: "/public/abstrakt.d8a2d89523158d92ef74.jpg",
@@ -37,9 +36,22 @@ export const metadata = {
     ],
   },
 };
+async function getAboutData() {
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/about`, {
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error("Ma'lumotlarni olishda xatolik.");
+    return res.json();
+  } catch (error) {
+    console.error("API xatosi:", error);
+    return null;
+  }
+}
 
-const Page = () => {
-  return <AboutCLient />;
+const Page = async () => {
+  const aboutData = await getAboutData();
+  return <AboutClient aboutData={aboutData} />;
 };
 
 export default Page;
