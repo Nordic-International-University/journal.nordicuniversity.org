@@ -1,16 +1,35 @@
 import React from "react";
 import ClientPage from "@/app/article/[slug]/ClientPage";
-import Script from "next/script";
+
+const getArticleBySlug = async (slug: string) => {
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/article/user/slug/${slug}`,
+      {
+        cache: "no-cache",
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch article: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    return await response.json();
+  } catch (e) {
+    console.error("Error fetching article:", e);
+    return null;
+  }
+};
 
 export async function generateMetadata({
   params,
 }: {
   params: { slug: string };
 }) {
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/article/user/slug/${params.slug}`,
-  );
-  const data = await response.json();
+  const data = await getArticleBySlug(params.slug);
+
   const fileUrl = data.file?.file_path
     ? `${process.env.NEXT_PUBLIC_API_URL}${data?.file?.file_path}`
     : "";
@@ -18,55 +37,55 @@ export async function generateMetadata({
     ? `${process.env.NEXT_PUBLIC_API_URL}${data?.image?.file_path}`
     : "/public/noUser.webp";
 
-  if (!response.ok) {
-    return {
-      title: "Default Title",
-      description: "Default Description",
-      keywords: "Default Keywords",
-      openGraph: {
-        title: "Default Title",
-        description: "Default Description",
-        url: `${process.env.NEXT_PUBLIC_API_URL}/article/${params.slug}`,
-        type: "article",
-        images: [
-          {
-            url: "https://default-image-path.png",
-            width: 800,
-            height: 600,
-            alt: "Default Image",
-          },
-        ],
-      },
-      twitter: {
-        card: "summary_large_image",
-        title: "Default Title",
-        description: "Default Description",
-        images: ["https://default-image-path.png"],
-      },
-      other: {
-        citation_title: "Default Title",
-        citation_author: "Unknown Author",
-        citation_publication_date: "Unknown Date",
-        citation_issn: "3030-3400",
-        citation_journal_title: "Nordic Journal",
-        citation_pdf_url: fileUrl,
-        "DC.title": "Default Title",
-        "DC.creator": "Unknown Author",
-        "DC.subject": "Research, Article",
-        "DC.description": "No description",
-        "DC.publisher": "Nordic University",
-        "DC.contributor": "No coAuthors",
-        "DC.date": "Unknown Date",
-        "DC.type": "Text",
-        "DC.format": "text/html",
-        "DC.identifier": `${process.env.NEXT_PUBLIC_API_URL}/article/${params.slug}`,
-        "DC.language": "uz",
-        "DC.coverage": "Global",
-        "DC.Identifier.ISSN": "3030-3400",
-        "DC.rights": "Public Domain",
-      },
-    };
-  }
+  // if (!data.ok) {
+  //   return {
+  //     title: "Default Title",
+  //     description: "Default Description",
+  //     keywords: "Default Keywords",
+  //     openGraph: {
+  //       title: "Default Title",
+  //       description: "Default Description",
+  //       url: `${process.env.NEXT_PUBLIC_API_URL}/article/${params.slug}`,
+  //       type: "article",
+  //       images: [
+  //         {
+  //           url: "https://default-image-path.png",
+  //           width: 800,
+  //           height: 600,
+  //           alt: "Default Image",
+  //         },
+  //       ],
+  //     },
+  //     twitter: {
+  //       card: "summary_large_image",
+  //       title: "Default Title",
+  //       description: "Default Description",
+  //       images: ["https://default-image-path.png"],
+  //     },
+  //     other: {
+  //       citation_title: "Default Title",
+  //       citation_author: "Unknown Author",
+  //       citation_publication_date: "Unknown Date",
+  //       citation_issn: "3030-3400",
+  //       citation_journal_title: "Nordic Journal",
+  //       citation_pdf_url: fileUrl,
+  //       "DC.title": "Default Title",
+  //       "DC.creator": "Unknown Author",
+  //       "DC.subject": "Research, Article",
+  //       "DC.description": "No description",
+  //       "DC.publisher": "Nordic University",
+  //       "DC.contributor": "No coAuthors",
+  //       "DC.date": "Unknown Date",
+  //       "DC.type": "Text",
+  //       "DC.format": "text/html",
+  //       "DC.identifier": `${process.env.NEXT_PUBLIC_API_URL}/article/${params.slug}`,
+  //       "DC.language": "uz",
+  //       "DC.coverage": "Global",
+  //       "DC.Identifier.ISSN": "3030-3400",
+  //       "DC.rights": "Public Domain",
+  //     },
+  //   };
+  // }
 
   return {
     title: data.title || "Default Title",
@@ -125,13 +144,7 @@ export async function generateMetadata({
 }
 
 const ArticleDetail = async ({ params }: { params: { slug: string } }) => {
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/article/user/slug/${params.slug}`,
-    {
-      cache: "no-cache",
-    },
-  );
-  const data = await response.json();
+  const data = getArticleBySlug(params.slug);
 
   return (
     <>
