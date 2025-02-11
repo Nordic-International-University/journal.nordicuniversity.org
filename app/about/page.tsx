@@ -39,7 +39,7 @@ export const metadata = {
 async function getAboutData() {
   try {
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/about`, {
-      cache: "no-store",
+      cache: "no-cache",
     });
     if (!res.ok) throw new Error("Ma'lumotlarni olishda xatolik.");
     return res.json();
