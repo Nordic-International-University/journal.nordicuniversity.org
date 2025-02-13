@@ -23,7 +23,7 @@ import type { InputRef } from "antd";
 import { useGetAllAuthorQuery } from "@/lib/query/search.query";
 import { useGetAllCategoryQuery } from "@/lib/query/category.query";
 import { useGetSubcategoriesByCategoryQuery } from "@/lib/query/article.query";
-import { UploadChangeParam } from "antd/es/upload";
+import { UploadChangeParam, UploadFile } from "antd/es/upload";
 import Dragger from "antd/es/upload/Dragger";
 import { CiCircleCheck } from "react-icons/ci";
 import Cookies from "js-cookie";
@@ -34,29 +34,132 @@ import { useGetAuthorProfileQuery } from "@/lib/query/myarticle.query";
 
 const { Option } = Select;
 
-const CreateArticle = () => {
-  const [keywords, setKeywords] = useState<string[]>([]);
+interface IArticleData {
+  id: string;
+  author_id: string;
+  categoryId: number;
+  SubCategoryId: number;
+  source_id: string | null;
+  source_file_name?: string;
+  title: string;
+  last_status: string;
+  abstract: string;
+  description: string;
+  keyword: string;
+  slug: string;
+  status: string;
+  references: string | null;
+  coAuthors?: Array<{
+    id: string;
+    full_name: string;
+  }>;
+}
+
+const CreateOrUpdateArticle = ({ slug }: { slug?: string }) => {
   const router = useRouter();
-  const [inputVisible, setInputVisible] = useState(false);
-  const [inputValue, setInputValue] = useState("");
-  const inputRef = useRef<InputRef>(null);
-  const [selectedCoAuthors, setSelectedCoAuthors] = useState([]);
-  const [file, setFile] = useState<any | null>(null);
+
   // @ts-ignore
   const { data: authors = [] } = useGetAllAuthorQuery();
   const { data: categories = [] } = useGetAllCategoryQuery();
   const { data: authorProfile } = useGetAuthorProfileQuery(
     Cookies.get("access_token"),
   );
-  const [selectedCategory, setSelectedCategory] = useState<
-    string | number | null
-  >(null);
+
+  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const { data: subcategories = [] } = useGetSubcategoriesByCategoryQuery(
     selectedCategory!,
-    {
-      skip: !selectedCategory,
-    },
+    { skip: !selectedCategory },
   );
+
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [inputVisible, setInputVisible] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+  const inputRef = useRef<InputRef>(null);
+
+  const [selectedCoAuthors, setSelectedCoAuthors] = useState<string[]>([]);
+  const [file, setFile] = useState<UploadFile | null>(null);
+  const [isEdit, setIsEdit] = useState<boolean>(false);
+  const [loadingArticle, setLoadingArticle] = useState<boolean>(false);
+  const [status, setStatus] = useState("");
+  const [initialValues, setInitialValues] = useState({
+    title: "",
+    description: "",
+    abstract: "",
+    keyword: "",
+    author_id: "",
+    categoryId: "",
+    SubCategoryId: "",
+    source_id: "",
+    coAuthorIds: [] as string[],
+    references: "",
+  });
+
+  useEffect(() => {
+    if (slug) {
+      setIsEdit(true);
+      setLoadingArticle(true);
+
+      axios
+        .get<IArticleData>(
+          `${process.env.NEXT_PUBLIC_API_URL}/article/user/slug/${slug}`,
+          {
+            headers: {
+              Authorization: Cookies.get("access_token") || "",
+            },
+          },
+        )
+        .then((res) => {
+          const articleData = res.data;
+          if (articleData) {
+            const splittedKeywords = articleData.keyword
+              ? articleData.keyword.split(",")
+              : [];
+            const coAuthorIds = articleData.coAuthors?.map((ca) => ca.id) || [];
+            setKeywords(splittedKeywords);
+            setSelectedCategory(articleData.categoryId);
+            setSelectedCoAuthors(coAuthorIds);
+            if (articleData.source_id) {
+              setFile({
+                uid: articleData.source_id,
+                name: articleData.source_file_name || "Eski file ",
+                status: "done",
+                type: "application/pdf",
+              });
+            }
+            setStatus(articleData.last_status);
+            setInitialValues({
+              title: articleData.title || "",
+              description: articleData.description || "",
+              abstract: articleData.abstract || "",
+              keyword: articleData.keyword || "",
+              author_id: articleData.author_id
+                ? String(articleData.author_id)
+                : String(authorProfile?.data?.id || ""),
+              categoryId: articleData.categoryId
+                ? String(articleData.categoryId)
+                : "",
+              SubCategoryId: articleData.SubCategoryId
+                ? String(articleData.SubCategoryId)
+                : "",
+              source_id: articleData.source_id || "",
+              coAuthorIds: coAuthorIds,
+              references: articleData.references || "",
+            });
+          }
+        })
+        .catch(() => {
+          message.error("Maqola ma'lumotlarini olishda xatolik yuz berdi.");
+        })
+        .finally(() => {
+          setLoadingArticle(false);
+        });
+    } else {
+      setInitialValues((prev) => ({
+        ...prev,
+        author_id: String(authorProfile?.data?.id || ""),
+      }));
+    }
+  }, [slug, authorProfile]);
 
   useEffect(() => {
     if (inputVisible) {
@@ -68,18 +171,20 @@ const CreateArticle = () => {
     setKeywords(keywords.filter((keyword) => keyword !== removedKeyword));
   };
 
-  const handleInputConfirm = (setField: any) => {
+  const handleInputConfirm = (
+    setFieldValue: (field: string, value: any) => void,
+  ) => {
     if (inputValue && !keywords.includes(inputValue.trim())) {
       const updatedKeywords = [...keywords, inputValue.trim()].filter(Boolean);
       setKeywords(updatedKeywords);
-      setField("keyword", updatedKeywords.join(","));
+      setFieldValue("keyword", updatedKeywords.join(","));
     }
     setInputValue("");
   };
 
   const UploadPropsPdf: (
-    field: (key: string, value: any) => void,
-  ) => UploadProps = (field) => {
+    setFieldValue: (field: string, value: any) => void,
+  ) => UploadProps = (setFieldValue) => {
     const allowedFormats = [
       "application/pdf",
       "application/msword",
@@ -93,12 +198,12 @@ const CreateArticle = () => {
       headers: {
         Authorization: Cookies.get("access_token") as string,
       },
-      beforeUpload(file: any) {
+      beforeUpload(file) {
         const isAllowedFormat = allowedFormats.includes(file.type);
         const isLt5M = file.size / 1024 / 1024 < 5;
         if (!isAllowedFormat) {
           message.warning(
-            "Faqat PDF, DOC, yoki DOCX formatdagi fayllarni yuklash mumkin!",
+            "Faqat PDF, DOC yoki DOCX formatdagi fayllarni yuklash mumkin!",
           );
         }
         if (!isLt5M) {
@@ -109,8 +214,13 @@ const CreateArticle = () => {
       onChange(info: UploadChangeParam<any>) {
         if (info.file.status === "done") {
           message.success(`${info.file.name} muvaffaqiyatli yuklandi!`);
-          field("source_id", info.file.response.link.id);
-          setFile(info.file);
+          setFieldValue("source_id", info.file.response.link.id);
+          setFile({
+            uid: info.file.response.link.id,
+            name: info.file.name,
+            status: "done",
+            type: info.file.type,
+          });
         } else if (info.file.status === "error") {
           message.error(`${info.file.name} yuklashda xatolik!`);
         }
@@ -119,20 +229,6 @@ const CreateArticle = () => {
 
     return props;
   };
-
-  const initialValues = {
-    title: "",
-    description: "",
-    abstract: "",
-    keyword: "",
-    author_id: `${authorProfile?.data?.id}`,
-    categoryId: "",
-    SubCategoryId: "",
-    source_id: "",
-    coAuthorIds: [],
-  };
-
-  initialValues;
 
   const validationSchema = Yup.object({
     title: Yup.string().required("Sarlavha majburiy."),
@@ -144,8 +240,64 @@ const CreateArticle = () => {
       "Yo‘nalish sohasini tanlash majburiy.",
     ),
     source_id: Yup.string().required("Fayl yuklanishi majburiy."),
-    author_id: Yup.string(),
   });
+
+  const handleArticleSubmit = async (
+    values: typeof initialValues,
+    { setSubmitting, resetForm }: any,
+  ) => {
+    setSubmitting(true);
+    const endpoint = isEdit
+      ? `${process.env.NEXT_PUBLIC_API_URL}/article/user/update/${slug}`
+      : `${process.env.NEXT_PUBLIC_API_URL}/article/user/create`;
+    const method = isEdit ? "put" : "post";
+
+    const data = {
+      ...values,
+      categoryId: Number(values.categoryId),
+      SubCategoryId: Number(values.SubCategoryId),
+    };
+
+    if (slug) {
+      (data as any).status = status;
+    }
+
+    try {
+      await axios({
+        method,
+        url: endpoint,
+        data,
+        headers: {
+          Authorization: Cookies.get("access_token") || "",
+        },
+      });
+
+      message.success(
+        isEdit
+          ? "Maqola muvaffaqiyatli yangilandi!"
+          : "Maqola muvaffaqiyatli yaratildi!",
+      );
+
+      router.push("/profile");
+      resetForm();
+    } catch (error: any) {
+      if (error.response?.status === 409) {
+        message.error("Bunday maqola allaqachon mavjud!");
+      } else if (error.response?.status === 500) {
+        message.error("Server bilan muammo yuzaga keldi!");
+      } else {
+        message.error(
+          "Maqolani yuborishda xatolik yuz berdi. Iltimos, yana urinib ko'ring.",
+        );
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (slug && loadingArticle) {
+    return <div>Loading article data...</div>;
+  }
 
   return (
     <Formik
@@ -154,40 +306,18 @@ const CreateArticle = () => {
       validateOnBlur
       validateOnChange
       enableReinitialize
-      onSubmit={async (values, { setSubmitting, resetForm }) => {
-        setSubmitting(true);
-        try {
-          await axios.post(
-            `${process.env.NEXT_PUBLIC_API_URL}/article/user/create`,
-            {
-              ...values,
-            },
-            {
-              headers: {
-                Authorization: Cookies.get("access_token"),
-              },
-            },
-          );
-          message.success("Maqola muvaffaqiyatli yaratildi!");
-          router.push("/profile");
-          resetForm();
-        } catch (e: any) {
-          if (e.response?.status === 409) {
-            message.error("Bunday maqola allaqachon mavjud!");
-          }
-          if (e.response?.status === 500) {
-            message.error("server bilan muommo yuzaga keldi!");
-          }
-          setSubmitting(false);
-        }
-      }}
+      onSubmit={handleArticleSubmit}
     >
-      {({ handleSubmit, isSubmitting, setFieldValue }) => (
+      {({ handleSubmit, isSubmitting, setFieldValue, values }) => (
         <Form className="placeholder:text-[10px]" onSubmit={handleSubmit}>
           <div>
-            <h1 className="text-xl font-semibold mb-5">Maqola yozing</h1>
+            <h1 className="text-xl font-semibold mb-5">
+              {isEdit ? "Maqolani tahrirlash" : "Maqola yozing"}
+            </h1>
           </div>
+
           <Row className="flex flex-col gap-3">
+            {/* Title */}
             <Col span={24}>
               <Field
                 name="title"
@@ -201,6 +331,8 @@ const CreateArticle = () => {
                 className="text-red-700 text-[13px]"
               />
             </Col>
+
+            {/* Description */}
             <Col span={24}>
               <Field
                 name="description"
@@ -214,9 +346,11 @@ const CreateArticle = () => {
                 className="text-red-700 text-[13px]"
               />
             </Col>
+
+            {/* Abstract */}
             <Col span={24}>
               <Field
-                rows={"4"}
+                rows={4}
                 name="abstract"
                 as={TextArea}
                 placeholder="Abstrakt"
@@ -228,9 +362,11 @@ const CreateArticle = () => {
                 className="text-red-700 text-[13px]"
               />
             </Col>
+
+            {/* Keywords */}
             <Col span={24}>
               <div className="flex flex-wrap gap-2 mb-3">
-                {keywords?.map((keyword) => (
+                {keywords.map((keyword) => (
                   <Tag
                     key={keyword}
                     closable
@@ -263,15 +399,13 @@ const CreateArticle = () => {
                     const pastedText = e.clipboardData.getData("Text");
                     const newKeywords = pastedText
                       .split(",")
-                      .map((keyword) => keyword.trim())
-                      .filter(
-                        (keyword) => keyword && !keywords.includes(keyword),
-                      );
+                      .map((k) => k.trim())
+                      .filter((k) => k && !keywords.includes(k));
 
                     if (newKeywords.length) {
-                      const updatedKeywords = [...keywords, ...newKeywords];
-                      setKeywords(updatedKeywords);
-                      setFieldValue("keyword", updatedKeywords.join(","));
+                      const updated = [...keywords, ...newKeywords];
+                      setKeywords(updated);
+                      setFieldValue("keyword", updated.join(","));
                     }
                   }}
                   onPressEnter={() => handleInputConfirm(setFieldValue)}
@@ -290,20 +424,23 @@ const CreateArticle = () => {
                 className="text-red-700 mt-2 text-[13px]"
               />
             </Col>
-            <Col span={24} className="flex max-sm:block items-center gap-3">
-              <div className="w-1/2 max-sm:w-full">
+            <Col span={24} className="flex flex-col md:flex-row md:gap-3">
+              <div className="w-full md:w-1/2">
                 <Select
-                  className="w-full max-sm:mb-3"
+                  className="w-full mb-3 md:mb-0"
                   placeholder="Yo‘nalishni tanlang"
                   size="large"
-                  onChange={(value) => {
-                    setSelectedCategory(value);
-                    setFieldValue("categoryId", value);
+                  value={
+                    values.categoryId ? Number(values.categoryId) : undefined
+                  }
+                  onChange={(val) => {
+                    setSelectedCategory(val);
+                    setFieldValue("categoryId", val);
                   }}
                 >
-                  {categories?.map((category) => (
-                    <Option key={category.id} value={category.id}>
-                      {category.name}
+                  {categories.map((cat: any) => (
+                    <Option key={cat.id} value={cat.id}>
+                      {cat.name}
                     </Option>
                   ))}
                 </Select>
@@ -313,23 +450,29 @@ const CreateArticle = () => {
                   className="text-red-700 text-[13px]"
                 />
               </div>
-              <div className="w-1/2 max-sm:w-full">
+
+              <div className="w-full md:w-1/2">
                 <Select
-                  onChange={(e) => {
-                    setFieldValue("SubCategoryId", e);
-                  }}
                   className="w-full"
-                  options={subcategories?.map((a: any) => ({
-                    label: a.name,
-                    value: a.id,
-                  }))}
-                  filterOption={(input: any, option: any) =>
-                    option?.label.toLowerCase().includes(input.toLowerCase())
-                  }
-                  disabled={selectedCategory === null ? true : false}
                   placeholder="Yo‘nalish sohasini tanlang"
                   size="large"
-                ></Select>
+                  value={
+                    values.SubCategoryId
+                      ? Number(values.SubCategoryId)
+                      : undefined
+                  }
+                  onChange={(val) => setFieldValue("SubCategoryId", val)}
+                  options={subcategories.map((sub: any) => ({
+                    label: sub.name,
+                    value: sub.id,
+                  }))}
+                  filterOption={(input, option) =>
+                    (option?.label as string)
+                      .toLowerCase()
+                      .includes(input.toLowerCase())
+                  }
+                  disabled={!selectedCategory}
+                />
                 <ErrorMessage
                   name="SubCategoryId"
                   component="div"
@@ -344,24 +487,24 @@ const CreateArticle = () => {
                 placeholder="Hammualliflarni tanlang"
                 style={{ width: "100%" }}
                 value={selectedCoAuthors}
-                onChange={(e) => {
-                  setSelectedCoAuthors(e);
-                  setFieldValue("coAuthorIds", e);
+                onChange={(val: string[]) => {
+                  setSelectedCoAuthors(val);
+                  setFieldValue("coAuthorIds", val);
                 }}
-                options={authors?.map((a: any) => ({
+                options={authors.map((a: any) => ({
                   label: a.full_name,
                   value: a.id,
                 }))}
-                filterOption={(input: any, option: any) =>
-                  option?.label.toLowerCase().includes(input.toLowerCase())
+                filterOption={(input, option) =>
+                  (option?.label as string)
+                    .toLowerCase()
+                    .includes(input.toLowerCase())
                 }
-                getPopupContainer={(trigger) => trigger.parentNode}
               />
             </Col>
             <Col span={24}>
               <Field
-                cols="30"
-                rows={"7"}
+                rows={7}
                 name="references"
                 as={TextArea}
                 placeholder="Foydalanilgan adabiyotlar (har bir adabiyotdan so‘ng yangi qator tashlang!)"
@@ -383,23 +526,19 @@ const CreateArticle = () => {
                 </p>
                 <p className="ant-upload-text">Maqola manbaasini yuklang.</p>
                 <p className="ant-upload-hint">
-                  Faqat PDF, DOC, yoki DOCX formatidagi fayllarni yuklash
-                  mumkin.
+                  Faqat PDF, DOC yoki DOCX formatidagi fayllarni yuklash mumkin.
                   <br />
                   Maksimal fayl hajmi: 5 MB
                 </p>
               </Dragger>
               {file && (
                 <div className="mt-3 flex items-center justify-between">
-                  <div className="uploaded-file-info gap-3">
-                    {file.type === "application/pdf" && (
+                  <div className="uploaded-file-info gap-3 flex items-center">
+                    {/* Ikonka turi */}
+                    {file.type?.includes("pdf") && (
                       <FilePdfOutlined style={{ fontSize: "20px" }} />
                     )}
-                    {file.type === "application/msword" && (
-                      <FileWordOutlined style={{ fontSize: "20px" }} />
-                    )}
-                    {file.type ===
-                      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" && (
+                    {file.type?.includes("word") && (
                       <FileWordOutlined style={{ fontSize: "20px" }} />
                     )}
                     <span>{file.name}</span>
@@ -407,23 +546,23 @@ const CreateArticle = () => {
                   <CiCircleCheck className="text-xl text-green-600" />
                 </div>
               )}
-              {!initialValues.source_id && (
-                <ErrorMessage
-                  className="text-red-700 text-[13px]"
-                  name="source_id"
-                  component="div"
-                />
-              )}
+
+              <ErrorMessage
+                className="text-red-700 text-[13px]"
+                name="source_id"
+                component="div"
+              />
             </Col>
           </Row>
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-end mt-4">
             <Button
               htmlType="submit"
               type="primary"
-              className="mt-3 uppercase px-10"
+              size="large"
+              className="uppercase px-10"
               disabled={isSubmitting}
             >
-              yuborish
+              {isEdit ? "Yangilash" : "Yuborish"}
             </Button>
           </div>
         </Form>
@@ -432,4 +571,4 @@ const CreateArticle = () => {
   );
 };
 
-export default CreateArticle;
+export default CreateOrUpdateArticle;

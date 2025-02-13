@@ -2,8 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Container } from "react-bootstrap";
-import { Table, Button, Collapse, Spin, Steps } from "antd";
-import { FcDocument } from "react-icons/fc";
+import { Table, Button, Collapse, Steps } from "antd";
 import dayjs from "dayjs";
 import { BiDownload } from "react-icons/bi";
 import { Viewer, Worker } from "@react-pdf-viewer/core";

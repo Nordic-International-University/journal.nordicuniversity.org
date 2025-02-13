@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Tabs, TabsProps, Table } from "antd";
+import { Tabs, TabsProps, Table, Button } from "antd";
 import dayjs from "dayjs";
 import { useRouter } from "next/navigation";
 import {
@@ -105,6 +105,15 @@ export default function TableComponent({ data }: ProfileClientProps) {
       title: "Holati",
       dataIndex: "status",
       key: "status",
+      render: (_: any, record: any) => {
+        const { text, icon } = getStatusTextAndIcon(record.status);
+        return (
+          <div style={{ display: "flex", alignItems: "center" }}>
+            {icon}
+            <span style={{ marginLeft: "8px" }}>{text}</span>
+          </div>
+        );
+      },
     },
     {
       title: "Yo‘nalish",
@@ -121,21 +130,33 @@ export default function TableComponent({ data }: ProfileClientProps) {
       dataIndex: "viewsCount",
       key: "viewsCount",
     },
+    {
+      title: "Tahrirlash",
+      key: "update",
+      render: (record: any) => {
+        console.log(record);
+        return record.status === ArticleStatusEnum.REJECTED ? (
+          <Button
+            type="primary"
+            onClick={(event) => {
+              event.stopPropagation();
+              router.push(`/profile/update/${record.slug}`);
+            }}
+          >
+            Tahrirlash
+          </Button>
+        ) : null;
+      },
+    },
   ];
 
   const articleDataSource = data?.Articles?.slice()
     .sort((a, b) => (dayjs(b.createdAt).isAfter(dayjs(a.createdAt)) ? 1 : -1))
     ?.map((item, _) => {
-      const { text, icon } = getStatusTextAndIcon(item?.status);
       return {
-        key: "1",
+        key: item?.slug,
         title: item?.title,
-        status: (
-          <div style={{ display: "flex", alignItems: "center" }}>
-            {icon}
-            <span style={{ marginLeft: "8px" }}>{text}</span>
-          </div>
-        ),
+        status: item?.status,
         slug: item?.slug,
         category: item?.category?.name,
         createdAt: dayjs(item?.createdAt).format("DD.MM.YYYY"),
