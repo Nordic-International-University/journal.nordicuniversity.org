@@ -134,7 +134,6 @@ export default function TableComponent({ data }: ProfileClientProps) {
       title: "Tahrirlash",
       key: "update",
       render: (record: any) => {
-        console.log(record);
         return record.status === ArticleStatusEnum.REJECTED ? (
           <Button
             type="primary"

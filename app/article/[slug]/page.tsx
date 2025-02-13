@@ -144,8 +144,7 @@ export async function generateMetadata({
 }
 
 const ArticleDetail = async ({ params }: { params: { slug: string } }) => {
-  const data = getArticleBySlug(params.slug);
-
+  const data = await getArticleBySlug(params.slug);
   return (
     <>
       <ClientPage data={data} />
