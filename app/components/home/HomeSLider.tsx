@@ -1,4 +1,3 @@
-import mobile_image from "@/public/mobile_image.webp";
 import Image from "next/image";
 import "swiper/css";
 import "swiper/css/effect-fade";
@@ -29,7 +28,7 @@ const HomeSlider = async ({ isAuth }: { isAuth: boolean | null | string }) => {
           </div>
         </div>
         <Image
-          src={mobile_image}
+          src={"/jurnal.jpg"}
           width={500}
           height={600}
           quality={75}
